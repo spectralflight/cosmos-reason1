@@ -6,38 +6,31 @@ requires-python = ">=3.10"
 dependencies = ["qwen_vl_utils", "transformers", "vllm"]
 
 [project.optional-dependencies]
-train = [
-    "attrs",
-    "cosmos-rl",
-    "datasets",
-    "tensorflow_datasets",
-    "toml",
-    "pillow",
-    "pyyaml",
-    "huggingface-hub",
-    "numpy",
-    "tqdm",
-    "opencv-python",
-    "ffmpeg-python",
-    "torch",
-    "wandb"
-]
 # https://github.com/QwenLM/Qwen2.5-VL/tree/main/qwen-vl-finetune#requirements
-qwen = [
-    "qwen-vl-finetune",
+train = [
+    "datasets",
+    "torch==2.6.0",
+    "torchvision==0.21.0",
+    "transformers==4.50.0",
+    "deepspeed==0.16.4",
+    # "flash_attn==2.7.4.post1",
+    "accelerate==1.4.0",
+    "torchcodec==0.2",
 ]
 
 [dependency-groups]
-build = ["torch"]
-dev = ["deptry"]
+# https://github.com/Dao-AILab/flash-attention?tab=readme-ov-file#installation-and-features
+build = [
+    "ninja",
+    "packaging",
+    "pip>=25.1",
+    "psutil",
+    "torch",
+]
+# compile = ["flash-attn"]
 
 [tool.uv]
 no-build-isolation-package = ["flash-attn"]
-override-dependencies = ["transformers>=4.53"]
-
-[tool.uv.sources]
-cosmos-rl = { git = "https://github.com/nvidia-cosmos/cosmos-rl.git" }
-qwen-vl-finetune = { path = "../../third_party/Qwen2.5-VL/qwen-vl-finetune" }
 
 [tool.deptry]
 known_first_party = ["tools"]
