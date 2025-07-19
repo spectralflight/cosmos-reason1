@@ -1,8 +1,8 @@
 import re
 
 VLAD_BENCH = {
-    "annotation_path": "/path/to/annotations.json",
-    "data_path": "/path/to/image/data",
+    "annotation_path": "/mnt/pvc/datasets/VLADBench/annotations.json",
+    "data_path": "/mnt/pvc/datasets/VLADBench",
 }
 
 data_dict = {

@@ -20,7 +20,7 @@ grad_accum_steps=4
 entry_file=qwenvl/train/train_qwen.py
 
 # Dataset configuration (replace with public dataset names)
-datasets=public_dataset1,public_dataset2
+datasets=vlad_bench
 
 # Output configuration
 run_name="qwen2vl-baseline"
@@ -60,7 +60,7 @@ args="
     --report_to wandb"
 
 # Launch training
-torchrun --nproc_per_node=${NPROC_PER_NODE} \
+torchrun --nproc_per_node=${NPROC_PER_NODE:-gpu} \
          --master_addr=${MASTER_ADDR} \
          --master_port=${MASTER_PORT} \
          ${entry_file} ${args}
