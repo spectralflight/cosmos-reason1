@@ -10,6 +10,7 @@
 #   "torchcodec",
 #   "torchvision",
 #   "transformers>=4.51.3",
+#   "pydantic",
 #   "vllm",
 # ]
 # [tool.uv]
@@ -25,71 +26,106 @@ Example:
 ```
 """
 
+import argparse
+import pydantic
 from rich import print
-from transformers import AutoProcessor
-from vllm import LLM, SamplingParams
-from qwen_vl_utils import process_vision_info
+import transformers
+import vllm
+import  qwen_vl_utils
 
-# You can also replace the MODEL_PATH by a safetensors folder path mentioned above
-MODEL_PATH = "nvidia/Cosmos-Reason1-7B"
+class VisionConfig(pydantic.BaseModel):
+    fps: int = pydantic.Field(default=1, description="FPS of the video")
+    max_pixels: int = pydantic.Field(default=81920, description="Max pixels of the video")
 
-llm = LLM(
-    model=MODEL_PATH,
-    limit_mm_per_prompt={"image": 10, "video": 10},
-)
 
-sampling_params = SamplingParams(
-    temperature=0.6,
-    top_p=0.95,
-    repetition_penalty=1.05,
-    max_tokens=4096,
-)
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prompt", type=str, help="User prompt message")
+    parser.add_argument(
+        "--system_prompt",
+        type=str,
+        default="You are a helpful assistant. Answer the question in the following format: <think>\nyour reasoning\n</think>\n\n<answer>\nyour answer\n</answer>.",
+        help="System prompt message",
+    )
+    parser.add_argument("--images", type=str, nargs="*", help="Image paths")
+    parser.add_argument("--videos", type=str, nargs="*", help="Video paths")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="nvidia/Cosmos-Reason1-7B",
+        help="Model name (https://huggingface.co/collections/nvidia/cosmos-reason1-67c9e926206426008f1da1b7)",
+    )
+    parser.add_argument("--vision", type=str, help="Vision config json file")
+    parser.add_argument("--sampling", type=str, help="Sampling config json file")
+    args = parser.parse_args()
+    
+    images = args.images or []
+    videos = args.videos or []
+    if args.vision is not None:
+        vision_config = VisionConfig.model_validate_json(open(args.vision, "rb").read())
+    else:
+        vision_config = VisionConfig()
 
-video_messages = [
-    {
-        "role": "system",
-        "content": "You are a helpful assistant. Answer the question in the following format: <think>\nyour reasoning\n</think>\n\n<answer>\nyour answer\n</answer>.",
-    },
-    {
-        "role": "user",
-        "content": [
-            {"type": "text", "text": ("Is it safe to turn right?")},
-            {
-                "type": "video",
-                "video": "assets/sample.mp4",
-                "fps": 4,
-            },
-        ],
-    },
-]
+    llm = vllm.LLM(
+        model=args.model,
+        limit_mm_per_prompt={"image": len(images), "video": len(videos)},
+    )
 
-# Here we use video messages as a demonstration
-messages = video_messages
+    if args.sampling is not None:
+        sampling_params = vllm.SamplingParams.model_validate_json(open(args.sampling, "rb").read())
+    else:
+        sampling_params = vllm.SamplingParams(
+            temperature=0.6,
+            top_p=0.95,
+            repetition_penalty=1.05,
+            max_tokens=4096,
+        )
 
-processor = AutoProcessor.from_pretrained(MODEL_PATH)
-prompt = processor.apply_chat_template(
-    messages,
-    tokenize=False,
-    add_generation_prompt=True,
-)
-image_inputs, video_inputs, video_kwargs = process_vision_info(
-    messages, return_video_kwargs=True
-)
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant. Answer the question in the following format: <think>\nyour reasoning\n</think>\n\n<answer>\nyour answer\n</answer>.",
+        },
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": ("Is it safe to turn right?")},
+                {
+                    "type": "video",
+                    "video": "assets/sample.mp4",
+                    "fps": 4,
+                },
+            ],
+        },
+    ]
 
-mm_data = {}
-if image_inputs is not None:
-    mm_data["image"] = image_inputs
-if video_inputs is not None:
-    mm_data["video"] = video_inputs
+    processor = transformers.AutoProcessor.from_pretrained(args.model)
+    prompt = processor.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    image_inputs, video_inputs, video_kwargs = qwen_vl_utils.process_vision_info(
+        messages, return_video_kwargs=True
+    )
 
-llm_inputs = {
-    "prompt": prompt,
-    "multi_modal_data": mm_data,
-    # FPS will be returned in video_kwargs
-    "mm_processor_kwargs": video_kwargs,
-}
+    mm_data = {}
+    if image_inputs is not None:
+        mm_data["image"] = image_inputs
+    if video_inputs is not None:
+        mm_data["video"] = video_inputs
 
-outputs = llm.generate([llm_inputs], sampling_params=sampling_params)
-generated_text = outputs[0].outputs[0].text
+    llm_inputs = {
+        "prompt": prompt,
+        "multi_modal_data": mm_data,
+        # FPS will be returned in video_kwargs
+        "mm_processor_kwargs": video_kwargs,
+    }
 
-print(generated_text)
+    outputs = llm.generate([llm_inputs], sampling_params=sampling_params)
+    generated_text = outputs[0].outputs[0].text
+
+    print(generated_text)
+
+if __name__ == "__main__":
+    main()
